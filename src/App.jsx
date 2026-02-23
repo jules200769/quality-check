@@ -124,6 +124,12 @@ const Navbar = () => {
           border: 1px solid rgba(17, 17, 17, 0.1);
           box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
         }
+        @media (max-width: 768px), (hover: none) {
+          .nav-container.nav-scrolled {
+            backdrop-filter: none;
+            background-color: rgba(245, 243, 238, 0.98);
+          }
+        }
       `}</style>
     </div>
   );
@@ -195,6 +201,7 @@ const DiagnosticShuffler = () => {
     const { t, locale } = useTranslation();
     const rawCards = t('features.diagnosticShuffler.cards') || [];
     const [cards, setCards] = useState(() => rawCards.map((c, i) => ({ ...c, id: i })));
+    const containerRef = useRef(null);
 
     useEffect(() => {
         const next = getTranslation(locale, 'features.diagnosticShuffler.cards') || [];
@@ -202,21 +209,38 @@ const DiagnosticShuffler = () => {
     }, [locale]);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setCards(prev => {
-                const newCards = [...prev];
-                const last = newCards.pop();
-                newCards.unshift(last);
-                return newCards;
-            });
-        }, 3000);
-        return () => clearInterval(interval);
+        const el = containerRef.current;
+        if (!el) return;
+        let intervalId = null;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    intervalId = setInterval(() => {
+                        setCards(prev => {
+                            const newCards = [...prev];
+                            const last = newCards.pop();
+                            newCards.unshift(last);
+                            return newCards;
+                        });
+                    }, 3000);
+                } else {
+                    if (intervalId) clearInterval(intervalId);
+                    intervalId = null;
+                }
+            },
+            { threshold: 0.2 }
+        );
+        observer.observe(el);
+        return () => {
+            observer.disconnect();
+            if (intervalId) clearInterval(intervalId);
+        };
     }, []);
 
     const ds = t('features.diagnosticShuffler') || {};
 
     return (
-        <div className="h-full flex flex-col justify-between p-8">
+        <div ref={containerRef} className="h-full flex flex-col justify-between p-8">
             <div>
                 <h3 className="font-heading font-bold text-xl mb-2">{ds.title}</h3>
                 <p className="font-data text-xs text-dark/60 uppercase tracking-widest">{ds.subtitle}</p>
@@ -254,26 +278,79 @@ const TelemetryTypewriter = () => {
     const tt = t('features.telemetryTypewriter') || {};
     const fullText = tt.fullText || '';
     const [text, setText] = useState("");
-    
-    useEffect(() => {
-        setText('');
-        let i = 0;
-        const typeWriter = setInterval(() => {
-            setText(fullText.slice(0, i));
-            i++;
-            if (i > fullText.length) {
-                clearInterval(typeWriter);
-                setTimeout(() => {
-                    setText("");
-                }, 5000);
-            }
-        }, 50);
+    const containerRef = useRef(null);
+    const iRef = useRef(0);
+    const isVisibleRef = useRef(false);
+    const [restart, setRestart] = useState(0);
 
-        return () => clearInterval(typeWriter);
+    useEffect(() => {
+        iRef.current = 0;
     }, [fullText]);
 
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el || !fullText) return;
+        let intervalId = null;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                isVisibleRef.current = entry.isIntersecting;
+                if (!entry.isIntersecting) {
+                    if (intervalId) clearInterval(intervalId);
+                    intervalId = null;
+                    return;
+                }
+                const intervalMs = isMobileOrTouch() ? 100 : 50;
+                intervalId = setInterval(() => {
+                    const i = iRef.current;
+                    if (i <= fullText.length) {
+                        setText(fullText.slice(0, i));
+                        iRef.current = i + 1;
+                    } else {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                        setTimeout(() => {
+                            iRef.current = 0;
+                            setText("");
+                            setRestart(r => r + 1);
+                        }, 5000);
+                    }
+                }, intervalMs);
+            },
+            { threshold: 0.2 }
+        );
+        observer.observe(el);
+        return () => {
+            observer.disconnect();
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [fullText]);
+
+    useEffect(() => {
+        if (!fullText || restart === 0 || !isVisibleRef.current) return;
+        const el = containerRef.current;
+        if (!el) return;
+        let intervalId = null;
+        const intervalMs = isMobileOrTouch() ? 100 : 50;
+        intervalId = setInterval(() => {
+            const i = iRef.current;
+            if (i <= fullText.length) {
+                setText(fullText.slice(0, i));
+                iRef.current = i + 1;
+            } else {
+                clearInterval(intervalId);
+                intervalId = null;
+                setTimeout(() => {
+                    iRef.current = 0;
+                    setText("");
+                    setRestart(r => r + 1);
+                }, 5000);
+            }
+        }, intervalMs);
+        return () => { if (intervalId) clearInterval(intervalId); };
+    }, [fullText, restart]);
+
     return (
-        <div className="h-full flex flex-col p-8">
+        <div ref={containerRef} className="h-full flex flex-col p-8">
             <div className="flex justify-between items-start mb-6">
                 <div>
                     <h3 className="font-heading font-bold text-xl mb-2">{tt.title}</h3>
@@ -314,36 +391,61 @@ const ProtocolScheduler = () => {
     const gridRef = useRef(null);
     const cursorRef = useRef(null);
     const btnRef = useRef(null);
+    const timelineRef = useRef(null);
+    const observerRef = useRef(null);
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            const tl = gsap.timeline({ repeat: -1, repeatDelay: 1 });
-            
+            const tl = gsap.timeline({ repeat: -1, repeatDelay: 1, paused: true });
+            timelineRef.current = tl;
+
             tl.set(cursorRef.current, { x: 50, y: 150, opacity: 0 });
-            
+
             tl.to(cursorRef.current, { x: -30, y: 0, opacity: 1, duration: 1, ease: "power2.inOut" })
               .to(cursorRef.current, { scale: 0.8, duration: 0.1 })
               .to('.cell-2', { backgroundColor: '#E63B2E', color: '#F5F3EE', duration: 0.2 }, "<")
               .to(cursorRef.current, { scale: 1, duration: 0.1 })
-              
+
               .to(cursorRef.current, { x: 130, y: 0, duration: 0.8, ease: "power2.inOut", delay: 0.3 })
               .to(cursorRef.current, { scale: 0.8, duration: 0.1 })
               .to('.cell-6', { backgroundColor: '#E63B2E', color: '#F5F3EE', duration: 0.2 }, "<")
               .to(cursorRef.current, { scale: 1, duration: 0.1 })
-              
+
               .to(cursorRef.current, { x: 50, y: 60, duration: 0.8, ease: "power2.inOut", delay: 0.3 })
               .to(cursorRef.current, { scale: 0.8, duration: 0.1 })
               .to(btnRef.current, { scale: 0.95, duration: 0.1 }, "<")
               .to(btnRef.current, { scale: 1, duration: 0.1 })
               .to(cursorRef.current, { scale: 1, duration: 0.1 })
-              
+
               .to(cursorRef.current, { opacity: 0, duration: 0.5, delay: 0.5 })
-              
+
               .set('.cell-2', { backgroundColor: 'rgba(17, 17, 17, 0.05)', color: '#111111' })
               .set('.cell-6', { backgroundColor: 'rgba(17, 17, 17, 0.05)', color: '#111111' });
 
+            const el = gridRef.current;
+            if (el) {
+                const observer = new IntersectionObserver(
+                    ([entry]) => {
+                        if (timelineRef.current) {
+                            if (entry.isIntersecting) timelineRef.current.play();
+                            else timelineRef.current.pause();
+                        }
+                    },
+                    { threshold: 0.2 }
+                );
+                observerRef.current = observer;
+                observer.observe(el);
+                if (el.getBoundingClientRect().top < window.innerHeight) tl.play();
+            }
         }, gridRef);
-        return () => ctx.revert();
+        return () => {
+            timelineRef.current = null;
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+                observerRef.current = null;
+            }
+            ctx.revert();
+        };
     }, []);
 
     return (
