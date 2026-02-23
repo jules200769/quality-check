@@ -6,6 +6,18 @@ import { translations, getStoredLocale, setStoredLocale, getTranslation } from '
 
 gsap.registerPlugin(ScrollTrigger);
 
+// Performance: reduce scroll-driven work on (especially mobile) devices
+ScrollTrigger.config({
+  limitCallbacks: true,
+  ignoreMobileResize: true,
+});
+// Optional: uncomment if scroll still lags on iOS — uses JS-based scroll (smoother but different feel)
+// ScrollTrigger.normalizeScroll(true);
+
+const isMobileOrTouch = () =>
+  typeof window !== 'undefined' &&
+  (window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window);
+
 // --- LANGUAGE CONTEXT ---
 
 const LanguageContext = createContext(null);
@@ -411,15 +423,16 @@ const Philosophy = () => {
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            // Parallax background
+            const mobile = isMobileOrTouch();
+            // Parallax background — on mobile use scrub: 2 to update less often and reduce scroll lag
             gsap.to(bgRef.current, {
-                yPercent: 30,
+                yPercent: mobile ? 15 : 30,
                 ease: 'none',
                 scrollTrigger: {
                     trigger: textRef.current,
                     start: 'top bottom',
                     end: 'bottom top',
-                    scrub: true
+                    scrub: mobile ? 2 : true
                 }
             });
 
@@ -552,10 +565,13 @@ const Protocol = () => {
     useEffect(() => {
         const ctx = gsap.context(() => {
             const cards = gsap.utils.toArray('.protocol-card');
-            
+            const mobile = isMobileOrTouch();
+            // filter: blur() is very expensive on mobile and causes scroll lag — skip on touch/mobile
+            const scrubVal = mobile ? 1.5 : true;
+
             cards.forEach((card, index) => {
                 if (index === cards.length - 1) return;
-                
+
                 ScrollTrigger.create({
                     trigger: card,
                     start: 'top top',
@@ -568,13 +584,13 @@ const Protocol = () => {
                 gsap.to(card, {
                     scale: 0.9,
                     opacity: 0.5,
-                    filter: 'blur(10px)',
+                    ...(mobile ? {} : { filter: 'blur(10px)' }),
                     ease: 'none',
                     scrollTrigger: {
                         trigger: cards[index + 1],
                         start: 'top bottom',
                         end: 'top top',
-                        scrub: true,
+                        scrub: scrubVal,
                     }
                 });
             });
