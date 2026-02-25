@@ -7,17 +7,17 @@ import GlassSurface from './components/GlassSurface';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const isMobileOrTouch = () =>
-  typeof window !== 'undefined' &&
-  (window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window);
-
+// Performance: reduce scroll-driven work on (especially mobile) devices
 ScrollTrigger.config({
   limitCallbacks: true,
   ignoreMobileResize: true,
 });
-if (isMobileOrTouch()) {
-  ScrollTrigger.normalizeScroll(true);
-}
+// Optional: uncomment if scroll still lags on iOS — uses JS-based scroll (smoother but different feel)
+// ScrollTrigger.normalizeScroll(true);
+
+const isMobileOrTouch = () =>
+  typeof window !== 'undefined' &&
+  (window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window);
 
 // --- LANGUAGE CONTEXT ---
 
@@ -199,8 +199,6 @@ const DiagnosticShuffler = () => {
     const rawCards = t('features.diagnosticShuffler.cards') || [];
     const [cards, setCards] = useState(() => rawCards.map((c, i) => ({ ...c, id: i })));
     const containerRef = useRef(null);
-    const intervalIdRef = useRef(null);
-    const isInViewRef = useRef(false);
 
     useEffect(() => {
         const next = getTranslation(locale, 'features.diagnosticShuffler.cards') || [];
@@ -210,12 +208,11 @@ const DiagnosticShuffler = () => {
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
+        let intervalId = null;
         const observer = new IntersectionObserver(
             ([entry]) => {
-                isInViewRef.current = entry.isIntersecting;
                 if (entry.isIntersecting) {
-                    if (intervalIdRef.current) return;
-                    intervalIdRef.current = setInterval(() => {
+                    intervalId = setInterval(() => {
                         setCards(prev => {
                             const newCards = [...prev];
                             const last = newCards.pop();
@@ -224,10 +221,8 @@ const DiagnosticShuffler = () => {
                         });
                     }, 3000);
                 } else {
-                    if (intervalIdRef.current) {
-                        clearInterval(intervalIdRef.current);
-                        intervalIdRef.current = null;
-                    }
+                    if (intervalId) clearInterval(intervalId);
+                    intervalId = null;
                 }
             },
             { threshold: 0.2 }
@@ -235,35 +230,7 @@ const DiagnosticShuffler = () => {
         observer.observe(el);
         return () => {
             observer.disconnect();
-            if (intervalIdRef.current) clearInterval(intervalIdRef.current);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (!isMobileOrTouch()) return;
-        const onStart = () => {
-            if (intervalIdRef.current) {
-                clearInterval(intervalIdRef.current);
-                intervalIdRef.current = null;
-            }
-        };
-        const onEnd = () => {
-            if (containerRef.current && isInViewRef.current && !intervalIdRef.current) {
-                intervalIdRef.current = setInterval(() => {
-                    setCards(prev => {
-                        const newCards = [...prev];
-                        const last = newCards.pop();
-                        newCards.unshift(last);
-                        return newCards;
-                    });
-                }, 3000);
-            }
-        };
-        window.addEventListener('mobile-scroll-start', onStart);
-        window.addEventListener('mobile-scroll-end', onEnd);
-        return () => {
-            window.removeEventListener('mobile-scroll-start', onStart);
-            window.removeEventListener('mobile-scroll-end', onEnd);
+            if (intervalId) clearInterval(intervalId);
         };
     }, []);
 
@@ -311,53 +278,47 @@ const TelemetryTypewriter = () => {
     const containerRef = useRef(null);
     const iRef = useRef(0);
     const isVisibleRef = useRef(false);
-    const intervalIdRef = useRef(null);
     const [restart, setRestart] = useState(0);
 
     useEffect(() => {
         iRef.current = 0;
     }, [fullText]);
 
-    const startTypewriter = () => {
-        if (intervalIdRef.current || !fullText) return;
-        intervalIdRef.current = setInterval(() => {
-            const i = iRef.current;
-            if (i <= fullText.length) {
-                setText(fullText.slice(0, i));
-                iRef.current = i + 1;
-            } else {
-                clearInterval(intervalIdRef.current);
-                intervalIdRef.current = null;
-                setTimeout(() => {
-                    iRef.current = 0;
-                    setText("");
-                    setRestart(r => r + 1);
-                }, 5000);
-            }
-        }, 50);
-    };
-
     useEffect(() => {
         const el = containerRef.current;
         if (!el || !fullText) return;
+        let intervalId = null;
         const observer = new IntersectionObserver(
             ([entry]) => {
                 isVisibleRef.current = entry.isIntersecting;
                 if (!entry.isIntersecting) {
-                    if (intervalIdRef.current) {
-                        clearInterval(intervalIdRef.current);
-                        intervalIdRef.current = null;
-                    }
+                    if (intervalId) clearInterval(intervalId);
+                    intervalId = null;
                     return;
                 }
-                startTypewriter();
+                const intervalMs = isMobileOrTouch() ? 100 : 50;
+                intervalId = setInterval(() => {
+                    const i = iRef.current;
+                    if (i <= fullText.length) {
+                        setText(fullText.slice(0, i));
+                        iRef.current = i + 1;
+                    } else {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                        setTimeout(() => {
+                            iRef.current = 0;
+                            setText("");
+                            setRestart(r => r + 1);
+                        }, 5000);
+                    }
+                }, intervalMs);
             },
             { threshold: 0.2 }
         );
         observer.observe(el);
         return () => {
             observer.disconnect();
-            if (intervalIdRef.current) clearInterval(intervalIdRef.current);
+            if (intervalId) clearInterval(intervalId);
         };
     }, [fullText]);
 
@@ -365,30 +326,25 @@ const TelemetryTypewriter = () => {
         if (!fullText || restart === 0 || !isVisibleRef.current) return;
         const el = containerRef.current;
         if (!el) return;
-        startTypewriter();
-        return () => {
-            if (intervalIdRef.current) clearInterval(intervalIdRef.current);
-        };
-    }, [fullText, restart]);
-
-    useEffect(() => {
-        if (!isMobileOrTouch()) return;
-        const onStart = () => {
-            if (intervalIdRef.current) {
-                clearInterval(intervalIdRef.current);
-                intervalIdRef.current = null;
+        let intervalId = null;
+        const intervalMs = isMobileOrTouch() ? 100 : 50;
+        intervalId = setInterval(() => {
+            const i = iRef.current;
+            if (i <= fullText.length) {
+                setText(fullText.slice(0, i));
+                iRef.current = i + 1;
+            } else {
+                clearInterval(intervalId);
+                intervalId = null;
+                setTimeout(() => {
+                    iRef.current = 0;
+                    setText("");
+                    setRestart(r => r + 1);
+                }, 5000);
             }
-        };
-        const onEnd = () => {
-            if (isVisibleRef.current && fullText && !intervalIdRef.current) startTypewriter();
-        };
-        window.addEventListener('mobile-scroll-start', onStart);
-        window.addEventListener('mobile-scroll-end', onEnd);
-        return () => {
-            window.removeEventListener('mobile-scroll-start', onStart);
-            window.removeEventListener('mobile-scroll-end', onEnd);
-        };
-    }, [fullText]);
+        }, intervalMs);
+        return () => { if (intervalId) clearInterval(intervalId); };
+    }, [fullText, restart]);
 
     return (
         <div ref={containerRef} className="h-full flex flex-col p-8">
@@ -415,6 +371,12 @@ const TelemetryTypewriter = () => {
                 </p>
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent h-[10%] animate-[scan_4s_linear_infinite] pointer-events-none"></div>
             </div>
+            <style>{`
+                @keyframes scan {
+                    0% { top: -10%; }
+                    100% { top: 110%; }
+                }
+            `}</style>
         </div>
     );
 };
@@ -480,18 +442,6 @@ const ProtocolScheduler = () => {
                 observerRef.current = null;
             }
             ctx.revert();
-        };
-    }, []);
-
-    useEffect(() => {
-        if (!isMobileOrTouch()) return;
-        const onStart = () => timelineRef.current?.pause();
-        const onEnd = () => timelineRef.current?.play();
-        window.addEventListener('mobile-scroll-start', onStart);
-        window.addEventListener('mobile-scroll-end', onEnd);
-        return () => {
-            window.removeEventListener('mobile-scroll-start', onStart);
-            window.removeEventListener('mobile-scroll-end', onEnd);
         };
     }, []);
 
@@ -573,18 +523,17 @@ const Philosophy = () => {
     useEffect(() => {
         const ctx = gsap.context(() => {
             const mobile = isMobileOrTouch();
-            if (!mobile) {
-                gsap.to(bgRef.current, {
-                    yPercent: 30,
-                    ease: 'none',
-                    scrollTrigger: {
-                        trigger: textRef.current,
-                        start: 'top bottom',
-                        end: 'bottom top',
-                        scrub: true
-                    }
-                });
-            }
+            // Parallax background — on mobile use scrub: 2 to update less often and reduce scroll lag
+            gsap.to(bgRef.current, {
+                yPercent: mobile ? 15 : 30,
+                ease: 'none',
+                scrollTrigger: {
+                    trigger: textRef.current,
+                    start: 'top bottom',
+                    end: 'bottom top',
+                    scrub: mobile ? 2 : true
+                }
+            });
 
             // Reveal text
             const words = gsap.utils.toArray('.reveal-word');
@@ -690,6 +639,21 @@ const ProtocolCard = ({ stepLabel, step, title, desc, animType, index, total }) 
                     )}
                 </div>
             </div>
+            
+            <style>{`
+                @keyframes scanLine {
+                    0% { left: 10%; }
+                    100% { left: 90%; }
+                }
+                .dash-anim {
+                    stroke-dasharray: 200;
+                    stroke-dashoffset: 200;
+                    animation: dash 3s linear infinite;
+                }
+                @keyframes dash {
+                    to { stroke-dashoffset: 0; }
+                }
+            `}</style>
         </div>
     );
 };
@@ -702,7 +666,7 @@ const Protocol = () => {
             const cards = gsap.utils.toArray('.protocol-card');
             const mobile = isMobileOrTouch();
             // filter: blur() is very expensive on mobile and causes scroll lag — skip on touch/mobile
-            const scrubVal = mobile ? 3 : true;
+            const scrubVal = mobile ? 1.5 : true;
 
             cards.forEach((card, index) => {
                 if (index === cards.length - 1) return;
@@ -881,42 +845,9 @@ const Footer = () => {
 };
 
 
-// --- MAIN APP: mobile scroll = pause all animations until scroll ends ---
+// --- MAIN APP ---
 
 function App() {
-  useEffect(() => {
-    if (!isMobileOrTouch()) return;
-    let timeoutId = null;
-    let scrolling = false;
-
-    const onScroll = () => {
-      if (!scrolling) {
-        scrolling = true;
-        document.body.classList.add('mobile-scrolling');
-        ScrollTrigger.disable();
-        window.dispatchEvent(new CustomEvent('mobile-scroll-start'));
-      }
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        scrolling = false;
-        document.body.classList.remove('mobile-scrolling');
-        ScrollTrigger.enable();
-        window.dispatchEvent(new CustomEvent('mobile-scroll-end'));
-      }, 150);
-    };
-
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('touchmove', onScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('touchmove', onScroll);
-      if (timeoutId) clearTimeout(timeoutId);
-      document.body.classList.remove('mobile-scrolling');
-      ScrollTrigger.enable();
-    };
-  }, []);
-
   return (
     <LanguageProvider>
       <div className="bg-background text-dark min-h-screen">
