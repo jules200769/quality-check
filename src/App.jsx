@@ -199,6 +199,8 @@ const DiagnosticShuffler = () => {
     const rawCards = t('features.diagnosticShuffler.cards') || [];
     const [cards, setCards] = useState(() => rawCards.map((c, i) => ({ ...c, id: i })));
     const containerRef = useRef(null);
+    const intervalIdRef = useRef(null);
+    const isInViewRef = useRef(false);
 
     useEffect(() => {
         const next = getTranslation(locale, 'features.diagnosticShuffler.cards') || [];
@@ -208,11 +210,12 @@ const DiagnosticShuffler = () => {
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
-        let intervalId = null;
         const observer = new IntersectionObserver(
             ([entry]) => {
+                isInViewRef.current = entry.isIntersecting;
                 if (entry.isIntersecting) {
-                    intervalId = setInterval(() => {
+                    if (intervalIdRef.current) return;
+                    intervalIdRef.current = setInterval(() => {
                         setCards(prev => {
                             const newCards = [...prev];
                             const last = newCards.pop();
@@ -221,8 +224,10 @@ const DiagnosticShuffler = () => {
                         });
                     }, 3000);
                 } else {
-                    if (intervalId) clearInterval(intervalId);
-                    intervalId = null;
+                    if (intervalIdRef.current) {
+                        clearInterval(intervalIdRef.current);
+                        intervalIdRef.current = null;
+                    }
                 }
             },
             { threshold: 0.2 }
@@ -230,7 +235,35 @@ const DiagnosticShuffler = () => {
         observer.observe(el);
         return () => {
             observer.disconnect();
-            if (intervalId) clearInterval(intervalId);
+            if (intervalIdRef.current) clearInterval(intervalIdRef.current);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isMobileOrTouch()) return;
+        const onStart = () => {
+            if (intervalIdRef.current) {
+                clearInterval(intervalIdRef.current);
+                intervalIdRef.current = null;
+            }
+        };
+        const onEnd = () => {
+            if (containerRef.current && isInViewRef.current && !intervalIdRef.current) {
+                intervalIdRef.current = setInterval(() => {
+                    setCards(prev => {
+                        const newCards = [...prev];
+                        const last = newCards.pop();
+                        newCards.unshift(last);
+                        return newCards;
+                    });
+                }, 3000);
+            }
+        };
+        window.addEventListener('mobile-scroll-start', onStart);
+        window.addEventListener('mobile-scroll-end', onEnd);
+        return () => {
+            window.removeEventListener('mobile-scroll-start', onStart);
+            window.removeEventListener('mobile-scroll-end', onEnd);
         };
     }, []);
 
@@ -278,47 +311,53 @@ const TelemetryTypewriter = () => {
     const containerRef = useRef(null);
     const iRef = useRef(0);
     const isVisibleRef = useRef(false);
+    const intervalIdRef = useRef(null);
     const [restart, setRestart] = useState(0);
 
     useEffect(() => {
         iRef.current = 0;
     }, [fullText]);
 
+    const startTypewriter = () => {
+        if (intervalIdRef.current || !fullText) return;
+        intervalIdRef.current = setInterval(() => {
+            const i = iRef.current;
+            if (i <= fullText.length) {
+                setText(fullText.slice(0, i));
+                iRef.current = i + 1;
+            } else {
+                clearInterval(intervalIdRef.current);
+                intervalIdRef.current = null;
+                setTimeout(() => {
+                    iRef.current = 0;
+                    setText("");
+                    setRestart(r => r + 1);
+                }, 5000);
+            }
+        }, 50);
+    };
+
     useEffect(() => {
         const el = containerRef.current;
         if (!el || !fullText) return;
-        let intervalId = null;
         const observer = new IntersectionObserver(
             ([entry]) => {
                 isVisibleRef.current = entry.isIntersecting;
                 if (!entry.isIntersecting) {
-                    if (intervalId) clearInterval(intervalId);
-                    intervalId = null;
+                    if (intervalIdRef.current) {
+                        clearInterval(intervalIdRef.current);
+                        intervalIdRef.current = null;
+                    }
                     return;
                 }
-                const intervalMs = 50;
-                intervalId = setInterval(() => {
-                    const i = iRef.current;
-                    if (i <= fullText.length) {
-                        setText(fullText.slice(0, i));
-                        iRef.current = i + 1;
-                    } else {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                        setTimeout(() => {
-                            iRef.current = 0;
-                            setText("");
-                            setRestart(r => r + 1);
-                        }, 5000);
-                    }
-                }, intervalMs);
+                startTypewriter();
             },
             { threshold: 0.2 }
         );
         observer.observe(el);
         return () => {
             observer.disconnect();
-            if (intervalId) clearInterval(intervalId);
+            if (intervalIdRef.current) clearInterval(intervalIdRef.current);
         };
     }, [fullText]);
 
@@ -326,25 +365,30 @@ const TelemetryTypewriter = () => {
         if (!fullText || restart === 0 || !isVisibleRef.current) return;
         const el = containerRef.current;
         if (!el) return;
-        let intervalId = null;
-        const intervalMs = 50;
-        intervalId = setInterval(() => {
-            const i = iRef.current;
-            if (i <= fullText.length) {
-                setText(fullText.slice(0, i));
-                iRef.current = i + 1;
-            } else {
-                clearInterval(intervalId);
-                intervalId = null;
-                setTimeout(() => {
-                    iRef.current = 0;
-                    setText("");
-                    setRestart(r => r + 1);
-                }, 5000);
-            }
-        }, intervalMs);
-        return () => { if (intervalId) clearInterval(intervalId); };
+        startTypewriter();
+        return () => {
+            if (intervalIdRef.current) clearInterval(intervalIdRef.current);
+        };
     }, [fullText, restart]);
+
+    useEffect(() => {
+        if (!isMobileOrTouch()) return;
+        const onStart = () => {
+            if (intervalIdRef.current) {
+                clearInterval(intervalIdRef.current);
+                intervalIdRef.current = null;
+            }
+        };
+        const onEnd = () => {
+            if (isVisibleRef.current && fullText && !intervalIdRef.current) startTypewriter();
+        };
+        window.addEventListener('mobile-scroll-start', onStart);
+        window.addEventListener('mobile-scroll-end', onEnd);
+        return () => {
+            window.removeEventListener('mobile-scroll-start', onStart);
+            window.removeEventListener('mobile-scroll-end', onEnd);
+        };
+    }, [fullText]);
 
     return (
         <div ref={containerRef} className="h-full flex flex-col p-8">
@@ -436,6 +480,18 @@ const ProtocolScheduler = () => {
                 observerRef.current = null;
             }
             ctx.revert();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isMobileOrTouch()) return;
+        const onStart = () => timelineRef.current?.pause();
+        const onEnd = () => timelineRef.current?.play();
+        window.addEventListener('mobile-scroll-start', onStart);
+        window.addEventListener('mobile-scroll-end', onEnd);
+        return () => {
+            window.removeEventListener('mobile-scroll-start', onStart);
+            window.removeEventListener('mobile-scroll-end', onEnd);
         };
     }, []);
 
@@ -825,9 +881,42 @@ const Footer = () => {
 };
 
 
-// --- MAIN APP ---
+// --- MAIN APP: mobile scroll = pause all animations until scroll ends ---
 
 function App() {
+  useEffect(() => {
+    if (!isMobileOrTouch()) return;
+    let timeoutId = null;
+    let scrolling = false;
+
+    const onScroll = () => {
+      if (!scrolling) {
+        scrolling = true;
+        document.body.classList.add('mobile-scrolling');
+        ScrollTrigger.disable();
+        window.dispatchEvent(new CustomEvent('mobile-scroll-start'));
+      }
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        scrolling = false;
+        document.body.classList.remove('mobile-scrolling');
+        ScrollTrigger.enable();
+        window.dispatchEvent(new CustomEvent('mobile-scroll-end'));
+      }, 150);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('touchmove', onScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('touchmove', onScroll);
+      if (timeoutId) clearTimeout(timeoutId);
+      document.body.classList.remove('mobile-scrolling');
+      ScrollTrigger.enable();
+    };
+  }, []);
+
   return (
     <LanguageProvider>
       <div className="bg-background text-dark min-h-screen">
