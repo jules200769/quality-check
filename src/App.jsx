@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Phone, ArrowRight, MousePointer2, Check, Languages } from 'lucide-react';
 import { translations, getStoredLocale, setStoredLocale, getTranslation } from './translations';
+import GlassSurface from './components/GlassSurface';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -55,6 +56,7 @@ function LanguageProvider({ children }) {
 const Navbar = () => {
   const containerRef = useRef(null);
   const { t, locale, setLocale } = useTranslation();
+  const [scrolled, setScrolled] = useState(false);
 
   const navItems = [
     { key: 'nav.features', href: '#features' },
@@ -64,73 +66,68 @@ const Navbar = () => {
   ];
 
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      ScrollTrigger.create({
-        start: 'top -50',
-        end: 99999,
-        toggleClass: {
-          className: 'nav-scrolled',
-          targets: containerRef.current,
-        },
-      });
-    }, containerRef);
-    return () => ctx.revert();
+    const st = ScrollTrigger.create({
+      start: 'top -50',
+      end: 99999,
+      onToggle: (self) => setScrolled(self.isActive),
+    });
+    return () => st.kill();
   }, []);
 
   return (
     <div className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
-      <nav 
-        ref={containerRef}
-        className="flex items-center justify-between w-full max-w-5xl px-6 py-4 transition-all duration-300 rounded-[2rem] text-primary pointer-events-auto nav-container"
-      >
-        <div className="font-heading font-bold tracking-tight text-xl link-lift cursor-pointer text-inherit">
-          {t('nav.brand')}
+      <div ref={containerRef} className="relative w-full max-w-5xl pointer-events-auto rounded-[2rem]">
+        {/* Glass background layer — fades in on scroll */}
+        <div
+          className={`absolute inset-0 rounded-[2rem] overflow-hidden transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+          <GlassSurface
+            width="100%"
+            height="100%"
+            borderRadius={15}
+            brightness={50}
+            opacity={0.93}
+            blur={11}
+            backgroundOpacity={0.1}
+            saturation={1}
+            borderWidth={0.07}
+            distortionScale={-180   }
+            style={{ boxShadow: '0 4px 30px rgba(0,0,0,0.06)' }}
+          />
         </div>
-        
-        <div className="hidden md:flex gap-8 font-heading text-sm font-medium text-inherit">
-          {navItems.map(({ key, href }) => (
-            <a key={key} href={href} className="link-lift cursor-pointer hover:text-accent transition-colors">
-              {t(key)}
-            </a>
-          ))}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setLocale(locale === 'en' ? 'nl' : 'en')}
-            className="flex items-center gap-2 font-heading text-sm font-medium text-inherit hover:text-accent transition-colors bg-transparent border-none cursor-pointer px-3 py-2 rounded-full hover:bg-primary/10"
-            title={locale === 'en' ? 'Switch to Dutch' : 'Switch to English'}
-            aria-label={locale === 'en' ? 'Switch to Dutch' : 'Switch to English'}
-          >
-            <Languages size={18} />
-            <span>{locale === 'en' ? 'NL' : 'EN'}</span>
-          </button>
-          <button className="bg-accent text-background px-6 py-2.5 rounded-full font-heading font-bold text-sm btn-magnetic flex items-center gap-2 border-none">
-            <span>{t('nav.whatsapp')}</span>
-            <Phone size={16} />
-          </button>
-        </div>
-      </nav>
-      <style>{`
-        .nav-container {
-            background-color: transparent;
-            color: #E8E4DD;
-        }
-        .nav-container.nav-scrolled {
-          background-color: rgba(245, 243, 238, 0.85);
-          backdrop-filter: blur(16px);
-          color: #111111;
-          border: 1px solid rgba(17, 17, 17, 0.1);
-          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
-        }
-        @media (max-width: 768px), (hover: none) {
-          .nav-container.nav-scrolled {
-            backdrop-filter: none;
-            background-color: rgba(245, 243, 238, 0.98);
-          }
-        }
-      `}</style>
+
+        {/* Nav content */}
+        <nav className={`relative z-10 flex items-center justify-between px-6 py-4 transition-colors duration-300 ${scrolled ? 'text-dark' : 'text-primary'}`}>
+          <div className="font-heading font-bold tracking-tight text-xl link-lift cursor-pointer text-inherit">
+            {t('nav.brand')}
+          </div>
+          
+          <div className="hidden md:flex gap-8 font-heading text-sm font-medium text-inherit">
+            {navItems.map(({ key, href }) => (
+              <a key={key} href={href} className="link-lift cursor-pointer hover:text-accent transition-colors">
+                {t(key)}
+              </a>
+            ))}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocale(locale === 'en' ? 'nl' : 'en')}
+              className="flex items-center gap-2 font-heading text-sm font-medium text-inherit hover:text-accent transition-colors bg-transparent border-none cursor-pointer px-3 py-2 rounded-full hover:bg-primary/10"
+              title={locale === 'en' ? 'Switch to Dutch' : 'Switch to English'}
+              aria-label={locale === 'en' ? 'Switch to Dutch' : 'Switch to English'}
+            >
+              <Languages size={18} />
+              <span>{locale === 'en' ? 'NL' : 'EN'}</span>
+            </button>
+            <button className="bg-accent text-background px-6 py-2.5 rounded-full font-heading font-bold text-sm btn-magnetic flex items-center gap-2 border-none">
+              <span>{t('nav.whatsapp')}</span>
+              <Phone size={16} />
+            </button>
+          </div>
+        </nav>
+      </div>
     </div>
   );
 };
