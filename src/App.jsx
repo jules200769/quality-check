@@ -19,49 +19,6 @@ const isMobileOrTouch = () =>
   typeof window !== 'undefined' &&
   (window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window);
 
-// On mobile only: pause moving animations (CSS + scrub ScrollTriggers) while user is scrolling
-function useMobileScrollPause() {
-  const scrollEndRef = useRef(null);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)');
-    if (!mq.matches) return;
-
-    let scrubTriggers = [];
-
-    const onScrollStart = () => {
-      document.body.classList.add('mobile-scrolling');
-      scrubTriggers = ScrollTrigger.getAll().filter((st) => (st.vars && st.vars.scrub) || st.scrub);
-      scrubTriggers.forEach((st) => st.disable());
-    };
-
-    const onScrollEnd = () => {
-      document.body.classList.remove('mobile-scrolling');
-      scrubTriggers.forEach((st) => st.enable());
-      scrubTriggers = [];
-    };
-
-    const scheduleScrollEnd = () => {
-      if (scrollEndRef.current) clearTimeout(scrollEndRef.current);
-      scrollEndRef.current = setTimeout(onScrollEnd, 150);
-    };
-
-    const handleStart = () => {
-      onScrollStart();
-      scheduleScrollEnd();
-    };
-
-    window.addEventListener('touchmove', handleStart, { passive: true });
-    window.addEventListener('wheel', handleStart, { passive: true });
-    return () => {
-      window.removeEventListener('touchmove', handleStart);
-      window.removeEventListener('wheel', handleStart);
-      if (scrollEndRef.current) clearTimeout(scrollEndRef.current);
-      document.body.classList.remove('mobile-scrolling');
-    };
-  }, []);
-}
-
 // --- LANGUAGE CONTEXT ---
 
 const LanguageContext = createContext(null);
@@ -412,7 +369,7 @@ const TelemetryTypewriter = () => {
                     {text}
                     <span className="inline-block w-2 h-4 bg-accent ml-1 animate-pulse align-middle"></span>
                 </p>
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent h-[10%] animate-[scan_4s_linear_infinite] pointer-events-none pause-on-mobile-scroll"></div>
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent h-[10%] animate-[scan_4s_linear_infinite] pointer-events-none"></div>
             </div>
             <style>{`
                 @keyframes scan {
@@ -651,9 +608,9 @@ const ProtocolCard = ({ stepLabel, step, title, desc, animType, index, total }) 
                 
                 <div className="flex-1 relative flex items-center justify-center bg-dark/5 rounded-[2rem] overflow-hidden">
                     {animType === 'geometric' && (
-                        <div className="w-64 h-64 border-4 border-dark/20 rounded-full flex items-center justify-center animate-[spin_20s_linear_infinite] pause-on-mobile-scroll">
-                            <div className="w-48 h-48 border-4 border-dark/40 rounded-full flex items-center justify-center border-dashed pause-on-mobile-scroll">
-                                <div className="w-32 h-32 border-4 border-accent rounded-sm rotate-45 animate-[spin_10s_linear_infinite_reverse] pause-on-mobile-scroll"></div>
+                        <div className="w-64 h-64 border-4 border-dark/20 rounded-full flex items-center justify-center animate-[spin_20s_linear_infinite]">
+                            <div className="w-48 h-48 border-4 border-dark/40 rounded-full flex items-center justify-center border-dashed">
+                                <div className="w-32 h-32 border-4 border-accent rounded-sm rotate-45 animate-[spin_10s_linear_infinite_reverse]"></div>
                             </div>
                         </div>
                     )}
@@ -663,7 +620,7 @@ const ProtocolCard = ({ stepLabel, step, title, desc, animType, index, total }) 
                             {Array.from({length: 6}).map((_, i) => (
                                 <div key={i} className="w-full h-2 bg-dark/10 rounded-full overflow-hidden relative"></div>
                             ))}
-                            <div className="absolute top-0 bottom-0 left-0 w-1 bg-accent shadow-[0_0_15px_#E63B2E] animate-[scanLine_3s_ease-in-out_infinite_alternate] pause-on-mobile-scroll"></div>
+                            <div className="absolute top-0 bottom-0 left-0 w-1 bg-accent shadow-[0_0_15px_#E63B2E] animate-[scanLine_3s_ease-in-out_infinite_alternate]"></div>
                         </div>
                     )}
                     
@@ -676,7 +633,7 @@ const ProtocolCard = ({ stepLabel, step, title, desc, animType, index, total }) 
                                 strokeWidth="1.5"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="dash-anim pause-on-mobile-scroll"
+                                className="dash-anim"
                             />
                         </svg>
                     )}
@@ -891,7 +848,6 @@ const Footer = () => {
 // --- MAIN APP ---
 
 function App() {
-  useMobileScrollPause();
   return (
     <LanguageProvider>
       <div className="bg-background text-dark min-h-screen">
