@@ -13,6 +13,25 @@
   }
 }
 
+/* Mobile: vloeiender scrollen, betere FPS */
+@media (max-width: 768px), (pointer: coarse) {
+  html {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+    scroll-behavior: auto;
+  }
+  body {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+    touch-action: pan-y;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Beperk repaints tijdens scroll (paint only; layout zou sticky kunnen breken) */
+  section {
+    contain: paint;
+  }
+}
+
 @layer utilities {
   .noise-overlay {
     position: fixed;

@@ -523,7 +523,7 @@ const Philosophy = () => {
     useEffect(() => {
         const ctx = gsap.context(() => {
             const mobile = isMobileOrTouch();
-            // Parallax background — on mobile use scrub: 2 to update less often and reduce scroll lag
+            // Parallax background — on mobile hogere scrub = minder updates, vloeiender scroll
             gsap.to(bgRef.current, {
                 yPercent: mobile ? 15 : 30,
                 ease: 'none',
@@ -531,7 +531,7 @@ const Philosophy = () => {
                     trigger: textRef.current,
                     start: 'top bottom',
                     end: 'bottom top',
-                    scrub: mobile ? 2 : true
+                    scrub: mobile ? 3 : true
                 }
             });
 
@@ -666,7 +666,8 @@ const Protocol = () => {
             const cards = gsap.utils.toArray('.protocol-card');
             const mobile = isMobileOrTouch();
             // filter: blur() is very expensive on mobile and causes scroll lag — skip on touch/mobile
-            const scrubVal = mobile ? 1.5 : true;
+            // Hogere scrub op mobile = minder ScrollTrigger-updates, betere FPS
+            const scrubVal = mobile ? 2.5 : true;
 
             cards.forEach((card, index) => {
                 if (index === cards.length - 1) return;

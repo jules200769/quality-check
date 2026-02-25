@@ -287,7 +287,7 @@ export function getStoredLocale() {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'en' || stored === 'nl') return stored;
   } catch (_) {}
-  return 'en';
+  return 'nl';
 }
 
 export function setStoredLocale(locale) {
