@@ -84,7 +84,7 @@ const Navbar = () => {
           <GlassSurface
             width="100%"
             height="100%"
-            borderRadius={15}
+            borderRadius={32}
             brightness={50}
             opacity={0.93}
             blur={11}
