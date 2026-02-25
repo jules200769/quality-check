@@ -65,3 +65,10 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #E63B2E; 
 }
+
+/* Mobile only: pause moving animations while user is scrolling */
+@media (max-width: 768px) {
+  body.mobile-scrolling .pause-on-mobile-scroll {
+    animation-play-state: paused !important;
+  }
+}
